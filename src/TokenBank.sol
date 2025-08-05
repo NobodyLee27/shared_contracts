@@ -46,6 +46,82 @@ contract TokenBank {
     mapping(address => address[]) public userTokens;
     mapping(address => mapping(address => bool)) public hasUserToken;
 
+    // ========== 事件声明 ==========
+    
+    /**
+     * @dev 存款事件
+     * @param user 用户地址
+     * @param token 代币地址
+     * @param amount 存款金额
+     * @param newBalance 用户新余额
+     * @param totalDeposit 该代币总存款量
+     */
+    event Deposit(
+        address indexed user,
+        address indexed token,
+        uint256 amount,
+        uint256 newBalance,
+        uint256 totalDeposit
+    );
+    
+    /**
+     * @dev Permit2存款事件
+     * @param user 用户地址
+     * @param token 代币地址
+     * @param amount 存款金额
+     * @param nonce Permit2 nonce
+     * @param deadline 签名截止时间
+     * @param newBalance 用户新余额
+     * @param totalDeposit 该代币总存款量
+     */
+    event DepositWithPermit2(
+        address indexed user,
+        address indexed token,
+        uint256 amount,
+        uint256 nonce,
+        uint256 deadline,
+        uint256 newBalance,
+        uint256 totalDeposit
+    );
+    
+    /**
+     * @dev 取款事件
+     * @param user 用户地址
+     * @param token 代币地址
+     * @param amount 取款金额
+     * @param newBalance 用户新余额
+     * @param totalDeposit 该代币总存款量
+     */
+    event Withdraw(
+        address indexed user,
+        address indexed token,
+        uint256 amount,
+        uint256 newBalance,
+        uint256 totalDeposit
+    );
+    
+    /**
+     * @dev 新代币支持事件
+     * @param token 新支持的代币地址
+     * @param tokenCount 当前支持的代币总数
+     */
+    event TokenSupported(
+        address indexed token,
+        uint256 tokenCount
+    );
+    
+    /**
+     * @dev 用户首次使用代币事件
+     * @param user 用户地址
+     * @param token 代币地址
+     * @param userTokenCount 用户持有的代币种类数量
+     */
+    event UserTokenAdded(
+        address indexed user,
+        address indexed token,
+        uint256 userTokenCount
+    );
+
     constructor(address _permit2) {
         require(_permit2 != address(0), "Invalid permit2");
         permit2 = IPermit2(_permit2);
@@ -69,11 +145,31 @@ contract TokenBank {
         require(balanceAfter - balanceBefore == amount, "Invalid token transfer");
         
         _updateBalances(address(token), msg.sender, amount);
+        
+        // 发出Permit2存款事件
+        emit DepositWithPermit2(
+            msg.sender,
+            address(token),
+            amount,
+            permit.permitted.amount,
+            permit.deadline,
+            balances[msg.sender][address(token)],
+            totalDeposits[address(token)]
+        );
     }
     
     function deposit(IERC20 token, uint256 amount) external {
         token.transferFrom(msg.sender, address(this), amount);
         _updateBalances(address(token), msg.sender, amount);
+        
+        // 发出存款事件
+        emit Deposit(
+            msg.sender,
+            address(token),
+            amount,
+            balances[msg.sender][address(token)],
+            totalDeposits[address(token)]
+        );
     }
 
     function withdraw(IERC20 token, uint256 amount) public {
@@ -82,6 +178,15 @@ contract TokenBank {
         balances[msg.sender][address(token)] = b - amount;
         totalDeposits[address(token)] -= amount;
         SafeERC20.safeTransfer(token, msg.sender, amount);
+        
+        // 发出取款事件
+        emit Withdraw(
+            msg.sender,
+            address(token),
+            amount,
+            balances[msg.sender][address(token)],
+            totalDeposits[address(token)]
+        );
     }
     
     // 内部函数：更新余额和相关记录
@@ -93,12 +198,18 @@ contract TokenBank {
         if (!isTokenSupported[token]) {
             supportedTokens.push(token);
             isTokenSupported[token] = true;
+            
+            // 发出新代币支持事件
+            emit TokenSupported(token, supportedTokens.length);
         }
         
         // 记录用户的代币
         if (!hasUserToken[user][token]) {
             userTokens[user].push(token);
             hasUserToken[user][token] = true;
+            
+            // 发出用户首次使用代币事件
+            emit UserTokenAdded(user, token, userTokens[user].length);
         }
     }
 
