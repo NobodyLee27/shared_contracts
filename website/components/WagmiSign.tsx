@@ -27,254 +27,556 @@ const erc20ABI = parseAbi([
   "function approve(address spender, uint256 amount) external returns (bool)",
 ]);
 
-const tokenBankABI = parseAbi([
-  "function deposit(address token, uint256 amount) external",
-  "function balances(address user, address token) view returns (uint256)",
-]);
-
 const workChainId = 80002n;
 
-export default function WagmiSign() {
+type MessageType = 'info' | 'success' | 'error' | 'warning';
+
+interface Message {
+  text: string;
+  type: MessageType;
+  timestamp: number;
+}
+
+export default function WagmiApprove() {
   const tokenBank = getAddress("0xf04DA1FfDA455F24cD217fbb2dFE2A079e15e02b");
   const loginAccount = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
   const config = useConfig();
 
-  const [msg, setMsg] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [token, setToken] = useState<string>("");
-  const [amount, setAmount] = useState(0n);
+  const [limitedAmount, setLimitedAmount] = useState(0n);
   const [isPending, setIsPending] = useState(false);
+  const [isLoadingBalances, setIsLoadingBalances] = useState(false);
 
   const [tokenAllowance, setTokenAllowance] = useState<bigint | null>(null);
   const [tokenBalance, setTokenBalance] = useState<bigint | null>(null);
-  const [bankBalance, setBankBalance] = useState<bigint | null>(null);
+  const [tokenInfo, setTokenInfo] = useState<{name: string, symbol: string} | null>(null);
 
   useEffect(() => {
     if (isAddress(token) && loginAccount.address) {
-      // 获取用户对TokenBank的授权额度
-      readContract(config, {
-        address: token,
-        abi: erc20ABI,
-        functionName: "allowance",
-        args: [loginAccount.address, tokenBank],
-      }).then((result) => {
-        setTokenAllowance(result);
-      }).catch(console.error);
-
-      // 获取用户的代币余额
-      readContract(config, {
-        address: token,
-        abi: erc20ABI,
-        functionName: "balanceOf",
-        args: [loginAccount.address],
-      }).then((result) => {
-        setTokenBalance(result);
-      }).catch(console.error);
-
-      // 获取用户在TokenBank中的余额
-      readContract(config, {
-        address: tokenBank,
-        abi: tokenBankABI,
-        functionName: "balances",
-        args: [loginAccount.address, token],
-      }).then((result) => {
-        setBankBalance(result);
-      }).catch(console.error);
-    }
-  }, [token, loginAccount.address, config, tokenBank]);
-
-  const chainId = loginAccount && loginAccount.chainId;
-  const canDeposit =
-    chainId !== undefined &&
-    BigInt(chainId) === workChainId &&
-    !isPending &&
-    token !== null &&
-    isAddress(token) &&
-    amount > 0n &&
-    tokenBalance !== null &&
-    tokenBalance >= amount;
-
-  const handleDeposit = async () => {
-    if (isPending) return;
-
-    try {
-      setIsPending(true);
-      setMsg(null);
-      if (token == null) return;
-      if (!isAddress(token)) return;
-      if (tokenAllowance == null) return;
-      if (tokenBalance == null) return;
-
-      // 检查用户余额是否足够
-      if (tokenBalance < amount) {
-        printLog("余额不足");
-        return;
-      }
-
-      // 1. 检查授权额度，如果不够则先进行授权
-      if (tokenAllowance < amount) {
-        printLog("授权额度不足，正在进行授权...");
-        // 发送授权交易
-        const approveHash = await writeContract(config, {
-          address: token!,
+      setIsLoadingBalances(true);
+      
+      Promise.all([
+        // 获取代币信息
+        readContract(config, {
+          address: token,
           abi: erc20ABI,
-          functionName: "approve",
-          args: [tokenBank, maxUint256],
-        });
-        console.log("approve hash", approveHash);
-        const approveReceipt = await waitForTransactionReceipt(config, { hash: approveHash });
-        console.log("approve receipt", approveReceipt);
-        // 更新授权额度
-        setTokenAllowance(maxUint256);
-        printLog(`授权成功: ${approveHash}`);
-      }
-
-      // 2. 调用TokenBank的deposit函数
-      printLog("正在存入代币...");
-      const depositHash = await writeContract(config, {
-        address: tokenBank,
-        abi: tokenBankABI,
-        functionName: "deposit",
-        args: [token, amount],
-      });
-      console.log("deposit hash", depositHash);
-      const depositReceipt = await waitForTransactionReceipt(config, { hash: depositHash });
-      console.log("deposit receipt", depositReceipt);
-      printLog(`存入成功: ${depositHash}`);
-
-      // 更新余额信息
-      if (loginAccount.address) {
-        // 更新用户代币余额
-        const newTokenBalance = await readContract(config, {
+          functionName: "name",
+        }),
+        readContract(config, {
+          address: token,
+          abi: erc20ABI,
+          functionName: "symbol",
+        }),
+        // 获取用户对TokenBank的授权额度
+        readContract(config, {
+          address: token,
+          abi: erc20ABI,
+          functionName: "allowance",
+          args: [loginAccount.address, tokenBank],
+        }),
+        // 获取用户的代币余额
+        readContract(config, {
           address: token,
           abi: erc20ABI,
           functionName: "balanceOf",
           args: [loginAccount.address],
-        });
-        setTokenBalance(newTokenBalance);
+        })
+      ]).then(([name, symbol, allowance, balance]) => {
+        setTokenInfo({ name: name as string, symbol: symbol as string });
+        setTokenAllowance(allowance as bigint);
+        setTokenBalance(balance as bigint);
+      }).catch((error) => {
+        console.error(error);
+        addMessage("获取代币信息失败", 'error');
+      }).finally(() => {
+        setIsLoadingBalances(false);
+      });
+    } else {
+      setTokenInfo(null);
+      setTokenAllowance(null);
+      setTokenBalance(null);
+    }
+  }, [token, loginAccount.address, config, tokenBank]);
 
-        // 更新银行余额
-        const newBankBalance = await readContract(config, {
-          address: tokenBank,
-          abi: tokenBankABI,
-          functionName: "balances",
-          args: [loginAccount.address, token],
-        });
-        setBankBalance(newBankBalance);
-      }
+  const chainId = loginAccount && loginAccount.chainId;
+  const isCorrectChain = chainId !== undefined && BigInt(chainId) === workChainId;
+  const canApprove = isCorrectChain && !isPending && !isLoadingBalances && token !== null && isAddress(token);
+  const canLimitedApprove = canApprove && limitedAmount > 0n && tokenBalance !== null && tokenBalance >= limitedAmount;
+
+  const addMessage = (text: string, type: MessageType = 'info') => {
+    const newMessage: Message = {
+      text,
+      type,
+      timestamp: Date.now()
+    };
+    setMessages(prev => [...prev, newMessage].slice(-5)); // 只保留最近5条消息
+  };
+
+  const clearMessages = () => {
+    setMessages([]);
+  };
+
+  const handleUnlimitedApprove = async () => {
+    if (isPending) return;
+
+    try {
+      setIsPending(true);
+      clearMessages();
+      
+      if (token == null) return;
+      if (!isAddress(token)) return;
+
+      addMessage("正在进行无限制授权...", 'info');
+      
+      const approveHash = await writeContract(config, {
+        address: token!,
+        abi: erc20ABI,
+        functionName: "approve",
+        args: [tokenBank, maxUint256],
+      });
+      
+      addMessage(`无限制授权交易已提交: ${approveHash.slice(0, 10)}...`, 'info');
+      
+      const approveReceipt = await waitForTransactionReceipt(config, { hash: approveHash });
+      setTokenAllowance(maxUint256);
+      addMessage(`无限制授权成功！交易哈希: ${approveHash.slice(0, 10)}...`, 'success');
+
     } catch (error: any) {
       console.error(error);
       if (error && error.shortMessage) {
-        printLog(`错误: ${error.shortMessage}`);
+        addMessage(`授权失败: ${error.shortMessage}`, 'error');
       } else {
-        printLog(`错误: ${stringify(error)}`);
+        addMessage(`授权失败: ${stringify(error)}`, 'error');
       }
     } finally {
       setIsPending(false);
     }
   };
 
-  const printLog = (str: string) => {
-    if (msg == null) {
-      setMsg(str); // first line
-    } else {
-      setMsg(msg + "\n" + str);
+  const handleLimitedApprove = async () => {
+    if (isPending) return;
+
+    try {
+      setIsPending(true);
+      clearMessages();
+      
+      if (token == null) return;
+      if (!isAddress(token)) return;
+      if (limitedAmount <= 0n) return;
+
+      addMessage(`正在进行限制授权 ${formatEther(limitedAmount)} ${tokenInfo?.symbol || ''}...`, 'info');
+      
+      const approveHash = await writeContract(config, {
+        address: token!,
+        abi: erc20ABI,
+        functionName: "approve",
+        args: [tokenBank, limitedAmount],
+      });
+      
+      addMessage(`限制授权交易已提交: ${approveHash.slice(0, 10)}...`, 'info');
+      
+      const approveReceipt = await waitForTransactionReceipt(config, { hash: approveHash });
+      setTokenAllowance(limitedAmount);
+      addMessage(`限制授权成功！授权金额: ${formatEther(limitedAmount)} ${tokenInfo?.symbol || ''}`, 'success');
+      setLimitedAmount(0n); // 重置输入金额
+
+    } catch (error: any) {
+      console.error(error);
+      if (error && error.shortMessage) {
+        addMessage(`授权失败: ${error.shortMessage}`, 'error');
+      } else {
+        addMessage(`授权失败: ${stringify(error)}`, 'error');
+      }
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  const formatAddress = (address: string) => {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
+  const getMessageColor = (type: MessageType) => {
+    switch (type) {
+      case 'success': return '#10b981';
+      case 'error': return '#ef4444';
+      case 'warning': return '#f59e0b';
+      default: return '#3b82f6';
     }
   };
 
   return (
-    <>
-      <h2>Token Bank 传统存款</h2>
-       {loginAccount.status === 'connected' ? (
-        <div>
-          <span>欢迎 {loginAccount.address}</span>
-          <button 
-            onClick={() => disconnect()}
-            style={{ marginLeft: '10px', padding: '5px 10px' }}
-          >
-            断开连接
-          </button>
-        </div>
-      ) : (
-        <div>
-          <span>请连接钱包</span>
-          {connectors.map((connector) => (
-            <button
-              key={connector.uid}
-              onClick={() => connect({ connector })}
-              style={{ margin: '5px', padding: '5px 10px' }}
-            >
-              连接 {connector.name}
-            </button>
-          ))}
-        </div>
-      )}
-      
-      <br />
-      <div>连接状态: {loginAccount.status}</div>
-      <div>链ID: {loginAccount.chainId}</div>
-      <span>欢迎 {loginAccount.address}</span>
-      <br />
-      {chainId !== undefined && BigInt(chainId) !== workChainId && (
-        <span>请切换到链 {workChainId.toString()}</span>
-      )}
-      <br />
-      <div>
-        <label>代币地址:</label>
-        <input
-          type="text"
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          placeholder="输入ERC20代币地址"
-          style={{ width: "400px", marginLeft: "10px" }}
-        />
+    <div style={{
+      maxWidth: '600px',
+      margin: '0 auto',
+      padding: '20px',
+      fontFamily: 'system-ui, -apple-system, sans-serif'
+    }}>
+      {/* 标题 */}
+      <div style={{
+        textAlign: 'center',
+        marginBottom: '30px'
+      }}>
+        <h1 style={{
+          fontSize: '28px',
+          fontWeight: '700',
+          color: '#1f2937',
+          margin: '0 0 8px 0'
+        }}>Token Approve Manager</h1>
+        <p style={{
+          color: '#6b7280',
+          margin: 0,
+          fontSize: '16px'
+        }}>代币授权管理工具</p>
       </div>
-      <br />
-      <div>
-        <label>存入数量:</label>
-        <input
-          type="number"
-          value={formatEther(amount)}
-          onChange={(e) => setAmount(parseEther(e.target.value || "0"))}
-          placeholder="输入存入数量"
-          style={{ marginLeft: "10px" }}
-        />
+
+      {/* 钱包连接卡片 */}
+      <div style={{
+        backgroundColor: '#ffffff',
+        border: '1px solid #e5e7eb',
+        borderRadius: '12px',
+        padding: '20px',
+        marginBottom: '20px',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+      }}>
+        <h3 style={{
+          margin: '0 0 15px 0',
+          fontSize: '18px',
+          fontWeight: '600',
+          color: '#1f2937'
+        }}>钱包连接</h3>
+        
+        {loginAccount.status === 'connected' ? (
+          <div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '10px'
+            }}>
+              <div>
+                <div style={{ fontSize: '14px', color: '#6b7280' }}>已连接地址</div>
+                <div style={{ fontSize: '16px', fontWeight: '500', color: '#1f2937' }}>
+                  {formatAddress(loginAccount.address!)}
+                </div>
+              </div>
+              <button 
+                onClick={() => disconnect()}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}
+              >
+                断开连接
+              </button>
+            </div>
+            
+            <div style={{
+              display: 'flex',
+              gap: '20px',
+              fontSize: '14px',
+              color: '#6b7280'
+            }}>
+              <span>状态: <span style={{ color: '#10b981', fontWeight: '500' }}>已连接</span></span>
+              <span>链ID: {loginAccount.chainId}</span>
+            </div>
+            
+            {!isCorrectChain && (
+              <div style={{
+                marginTop: '10px',
+                padding: '10px',
+                backgroundColor: '#fef3c7',
+                border: '1px solid #f59e0b',
+                borderRadius: '8px',
+                color: '#92400e',
+                fontSize: '14px'
+              }}>
+                ⚠️ 请切换到链 {workChainId.toString()}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div>
+            <p style={{ margin: '0 0 15px 0', color: '#6b7280' }}>请连接钱包以继续</p>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              {connectors.map((connector) => (
+                <button
+                  key={connector.uid}
+                  onClick={() => connect({ connector })}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}
+                >
+                  连接 {connector.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
-      <br />
-      <div>
-        <span>授权额度: {formatEther(tokenAllowance || 0n)} </span>
-        <br />
-        <span>钱包余额: {formatEther(tokenBalance || 0n)} </span>
-        <br />
-        <span>银行余额: {formatEther(bankBalance || 0n)} </span>
-      </div>
-      <br />
-      <button 
-        onClick={handleDeposit} 
-        disabled={!canDeposit}
-        style={{
-          padding: "10px 20px",
-          backgroundColor: canDeposit ? "#007bff" : "#ccc",
-          color: "white",
-          border: "none",
-          borderRadius: "5px",
-          cursor: canDeposit ? "pointer" : "not-allowed"
-        }}
-      >
-        {isPending ? "处理中..." : "存入代币"}
-      </button>
-      {msg && (
-        <div style={{ 
-          border: "1px solid blue", 
-          padding: "10px", 
-          marginTop: "10px",
-          backgroundColor: "#f0f8ff",
-          whiteSpace: "pre-line"
+
+      {/* 授权操作卡片 */}
+      {loginAccount.status === 'connected' && isCorrectChain && (
+        <div style={{
+          backgroundColor: '#ffffff',
+          border: '1px solid #e5e7eb',
+          borderRadius: '12px',
+          padding: '20px',
+          marginBottom: '20px',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
         }}>
-          <span>{msg}</span>
+          <h3 style={{
+            margin: '0 0 20px 0',
+            fontSize: '18px',
+            fontWeight: '600',
+            color: '#1f2937'
+          }}>授权操作</h3>
+          
+          {/* 代币地址输入 */}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{
+              display: 'block',
+              marginBottom: '8px',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#374151'
+            }}>代币地址</label>
+            <input
+              type="text"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="输入ERC20代币地址"
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+            {tokenInfo && (
+              <div style={{
+                marginTop: '8px',
+                fontSize: '12px',
+                color: '#10b981'
+              }}>
+                ✓ {tokenInfo.name} ({tokenInfo.symbol})
+              </div>
+            )}
+          </div>
+
+          {/* 余额信息 */}
+          {isAddress(token) && (
+            <div style={{
+              backgroundColor: '#f9fafb',
+              border: '1px solid #e5e7eb',
+              borderRadius: '8px',
+              padding: '16px',
+              marginBottom: '20px'
+            }}>
+              <h4 style={{
+                margin: '0 0 12px 0',
+                fontSize: '14px',
+                fontWeight: '600',
+                color: '#374151'
+              }}>代币信息</h4>
+              
+              {isLoadingBalances ? (
+                <div style={{ color: '#6b7280', fontSize: '14px' }}>加载中...</div>
+              ) : (
+                <div style={{ display: 'grid', gap: '8px', fontSize: '14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#6b7280' }}>钱包余额:</span>
+                    <span style={{ fontWeight: '500' }}>{formatEther(tokenBalance || 0n)} {tokenInfo?.symbol || ''}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#6b7280' }}>当前授权额度:</span>
+                    <span style={{ fontWeight: '500' }}>
+                      {tokenAllowance === maxUint256 ? '无限制' : formatEther(tokenAllowance || 0n)}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#6b7280' }}>授权对象:</span>
+                    <span style={{ fontWeight: '500', fontSize: '12px' }}>{formatAddress(tokenBank)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 无限制授权按钮 */}
+          <div style={{ marginBottom: '20px' }}>
+            <button 
+              onClick={handleUnlimitedApprove} 
+              disabled={!canApprove}
+              style={{
+                width: '100%',
+                padding: '14px',
+                backgroundColor: canApprove ? '#10b981' : '#d1d5db',
+                color: canApprove ? 'white' : '#9ca3af',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: canApprove ? 'pointer' : 'not-allowed',
+                fontSize: '16px',
+                fontWeight: '600',
+                transition: 'background-color 0.2s',
+                marginBottom: '8px'
+              }}
+            >
+              {isPending ? '处理中...' : '无限制授权'}
+            </button>
+            <div style={{
+              fontSize: '12px',
+              color: '#6b7280',
+              textAlign: 'center'
+            }}>
+              一次授权，永久有效（推荐用于信任的合约）
+            </div>
+          </div>
+
+          {/* 限制授权部分 */}
+          <div style={{
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            padding: '16px',
+            backgroundColor: '#fafafa'
+          }}>
+            <h4 style={{
+              margin: '0 0 12px 0',
+              fontSize: '16px',
+              fontWeight: '600',
+              color: '#374151'
+            }}>限制授权</h4>
+            
+            {/* 限制授权金额输入 */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '8px',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: '#374151'
+              }}>授权金额</label>
+              <input
+                type="number"
+                value={formatEther(limitedAmount)}
+                onChange={(e) => setLimitedAmount(parseEther(e.target.value || "0"))}
+                placeholder="输入授权金额"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            {/* 限制授权按钮 */}
+            <button 
+              onClick={handleLimitedApprove} 
+              disabled={!canLimitedApprove}
+              style={{
+                width: '100%',
+                padding: '14px',
+                backgroundColor: canLimitedApprove ? '#3b82f6' : '#d1d5db',
+                color: canLimitedApprove ? 'white' : '#9ca3af',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: canLimitedApprove ? 'pointer' : 'not-allowed',
+                fontSize: '16px',
+                fontWeight: '600',
+                transition: 'background-color 0.2s',
+                marginBottom: '8px'
+              }}
+            >
+              {isPending ? '处理中...' : '限制授权'}
+            </button>
+            <div style={{
+              fontSize: '12px',
+              color: '#6b7280',
+              textAlign: 'center'
+            }}>
+              只授权指定金额，更加安全
+            </div>
+          </div>
         </div>
       )}
-    </>
+
+      {/* 消息日志 */}
+      {messages.length > 0 && (
+        <div style={{
+          backgroundColor: '#ffffff',
+          border: '1px solid #e5e7eb',
+          borderRadius: '12px',
+          padding: '20px',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '15px'
+          }}>
+            <h3 style={{
+              margin: 0,
+              fontSize: '18px',
+              fontWeight: '600',
+              color: '#1f2937'
+            }}>操作日志</h3>
+            <button
+              onClick={clearMessages}
+              style={{
+                padding: '4px 8px',
+                backgroundColor: 'transparent',
+                color: '#6b7280',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '12px'
+              }}
+            >
+              清除
+            </button>
+          </div>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {messages.map((message, index) => (
+              <div
+                key={index}
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  backgroundColor: `${getMessageColor(message.type)}15`,
+                  borderLeft: `3px solid ${getMessageColor(message.type)}`,
+                  color: '#1f2937'
+                }}
+              >
+                {message.text}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
