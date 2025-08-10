@@ -68,7 +68,7 @@ interface Message {
 }
 
 export default function WagmiSignPermit2() {
-  const tokenBank = getAddress("0xf04DA1FfDA455F24cD217fbb2dFE2A079e15e02b");
+  const tokenBank = getAddress("0x085de1616d11610220293df29ba7854477532426");
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
   const loginAccount = useAccount();

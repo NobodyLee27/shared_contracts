@@ -10,7 +10,8 @@ import { TokenBank } from "../src/TokenBank.sol";
 /**
 * == Logs ==
   Deploying contracts with the account: 0x355eb1c3D6dF0642b3abe2785e821C574837C79f
-  deploy token_bank: 0xf04DA1FfDA455F24cD217fbb2dFE2A079e15e02b
+  deploy token_bank: 0x085De1616D11610220293Df29Ba7854477532426
+
  */
 
 contract TokenBankDeployer is Script {

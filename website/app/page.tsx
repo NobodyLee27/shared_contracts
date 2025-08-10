@@ -3,7 +3,7 @@
 import { WagmiProvider, http } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createConfig } from 'wagmi'
-import { mainnet, sepolia, polygonAmoy } from 'wagmi/chains'
+import { polygonAmoy } from 'wagmi/chains'
 import { injected, metaMask, walletConnect } from '@wagmi/connectors'
 import WagmiSignPermit2 from '@/components/WagmiSignPermit2'
 import WagmiSign from '@/components/WagmiSign'
@@ -14,12 +14,13 @@ const config = createConfig({
   connectors: [
     metaMask(),
     walletConnect({
-      projectId: '1234567890',
+      projectId: 'd055f5fe4129ec10d77fe8e68980e7fb',
     }),
     injected(),
   ],
   transports: {
-    [polygonAmoy.id]: http('https://polygon-amoy.infura.io/v3/84c45d069b5347459844c6869a6c2485'),
+    // [polygonAmoy.id]: http('https://polygon-amoy.infura.io/v3/84c45d069b5347459844c6869a6c2485'),
+    [polygonAmoy.id]: http('https://polygon-amoy.g.alchemy.com/v2/vkZ5WPCV0qB9Gye9sajMsn9YhdSl7Shy'),
   },
 })
 

@@ -27,6 +27,14 @@ const erc20ABI = parseAbi([
   "function approve(address spender, uint256 amount) external returns (bool)",
 ]);
 
+// TokenBank合约ABI
+const tokenBankABI = parseAbi([
+  "function deposit(address token, uint256 amount) external",
+  "function withdraw(address token, uint256 amount) external",
+  "function getUserBalance(address user, address token) external view returns (uint256)",
+  "function balances(address user, address token) external view returns (uint256)",
+]);
+
 const workChainId = 80002n;
 
 type MessageType = 'info' | 'success' | 'error' | 'warning';
@@ -38,7 +46,8 @@ interface Message {
 }
 
 export default function WagmiApprove() {
-  const tokenBank = getAddress("0xf04DA1FfDA455F24cD217fbb2dFE2A079e15e02b");
+  
+  const tokenBank = getAddress("0x085De1616D11610220293Df29Ba7854477532426");
   const loginAccount = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
@@ -47,11 +56,13 @@ export default function WagmiApprove() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [token, setToken] = useState<string>("");
   const [limitedAmount, setLimitedAmount] = useState(0n);
+  const [depositAmount, setDepositAmount] = useState(0n);
   const [isPending, setIsPending] = useState(false);
   const [isLoadingBalances, setIsLoadingBalances] = useState(false);
 
   const [tokenAllowance, setTokenAllowance] = useState<bigint | null>(null);
   const [tokenBalance, setTokenBalance] = useState<bigint | null>(null);
+  const [bankBalance, setBankBalance] = useState<bigint | null>(null);
   const [tokenInfo, setTokenInfo] = useState<{name: string, symbol: string} | null>(null);
 
   useEffect(() => {
@@ -83,11 +94,19 @@ export default function WagmiApprove() {
           abi: erc20ABI,
           functionName: "balanceOf",
           args: [loginAccount.address],
+        }),
+        // 获取用户在TokenBank的余额
+        readContract(config, {
+          address: tokenBank,
+          abi: tokenBankABI,
+          functionName: "getUserBalance",
+          args: [loginAccount.address, token],
         })
-      ]).then(([name, symbol, allowance, balance]) => {
+      ]).then(([name, symbol, allowance, balance, bankBal]) => {
         setTokenInfo({ name: name as string, symbol: symbol as string });
         setTokenAllowance(allowance as bigint);
         setTokenBalance(balance as bigint);
+        setBankBalance(bankBal as bigint);
       }).catch((error) => {
         console.error(error);
         addMessage("获取代币信息失败", 'error');
@@ -98,6 +117,7 @@ export default function WagmiApprove() {
       setTokenInfo(null);
       setTokenAllowance(null);
       setTokenBalance(null);
+      setBankBalance(null);
     }
   }, [token, loginAccount.address, config, tokenBank]);
 
@@ -105,6 +125,7 @@ export default function WagmiApprove() {
   const isCorrectChain = chainId !== undefined && BigInt(chainId) === workChainId;
   const canApprove = isCorrectChain && !isPending && !isLoadingBalances && token !== null && isAddress(token);
   const canLimitedApprove = canApprove && limitedAmount > 0n && tokenBalance !== null && tokenBalance >= limitedAmount;
+  const canDeposit = canApprove && depositAmount > 0n && tokenBalance !== null && tokenBalance >= depositAmount && tokenAllowance !== null && tokenAllowance >= depositAmount;
 
   const addMessage = (text: string, type: MessageType = 'info') => {
     const newMessage: Message = {
@@ -195,6 +216,49 @@ export default function WagmiApprove() {
     }
   };
 
+  const handleDeposit = async () => {
+    if (isPending) return;
+
+    try {
+      setIsPending(true);
+      clearMessages();
+      
+      if (token == null) return;
+      if (!isAddress(token)) return;
+      if (depositAmount <= 0n) return;
+
+      addMessage(`正在存款 ${formatEther(depositAmount)} ${tokenInfo?.symbol || ''}...`, 'info');
+      
+      const depositHash = await writeContract(config, {
+        address: tokenBank,
+        abi: tokenBankABI,
+        functionName: "deposit",
+        args: [token, depositAmount],
+      });
+      
+      addMessage(`存款交易已提交: ${depositHash.slice(0, 10)}...`, 'info');
+      
+      const depositReceipt = await waitForTransactionReceipt(config, { hash: depositHash });
+      
+      // 更新余额
+      setBankBalance((prev) => (prev || 0n) + depositAmount);
+      setTokenBalance((prev) => (prev || 0n) - depositAmount);
+      
+      addMessage(`存款成功！存款金额: ${formatEther(depositAmount)} ${tokenInfo?.symbol || ''}`, 'success');
+      setDepositAmount(0n); // 重置输入金额
+
+    } catch (error: any) {
+      console.error(error);
+      if (error && error.shortMessage) {
+        addMessage(`存款失败: ${error.shortMessage}`, 'error');
+      } else {
+        addMessage(`存款失败: ${stringify(error)}`, 'error');
+      }
+    } finally {
+      setIsPending(false);
+    }
+  };
+
   const formatAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
@@ -225,12 +289,12 @@ export default function WagmiApprove() {
           fontWeight: '700',
           color: '#1f2937',
           margin: '0 0 8px 0'
-        }}>Token Approve Manager</h1>
+        }}>Token Bank Manager</h1>
         <p style={{
           color: '#6b7280',
           margin: 0,
           fontSize: '16px'
-        }}>代币授权管理工具</p>
+        }}>代币银行管理工具</p>
       </div>
 
       {/* 钱包连接卡片 */}
@@ -331,7 +395,7 @@ export default function WagmiApprove() {
         )}
       </div>
 
-      {/* 授权操作卡片 */}
+      {/* 授权和存款操作卡片 */}
       {loginAccount.status === 'connected' && isCorrectChain && (
         <div style={{
           backgroundColor: '#ffffff',
@@ -346,7 +410,7 @@ export default function WagmiApprove() {
             fontSize: '18px',
             fontWeight: '600',
             color: '#1f2937'
-          }}>授权操作</h3>
+          }}>代币操作</h3>
           
           {/* 代币地址输入 */}
           <div style={{ marginBottom: '20px' }}>
@@ -407,6 +471,10 @@ export default function WagmiApprove() {
                     <span style={{ fontWeight: '500' }}>{formatEther(tokenBalance || 0n)} {tokenInfo?.symbol || ''}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#6b7280' }}>银行余额:</span>
+                    <span style={{ fontWeight: '500' }}>{formatEther(bankBalance || 0n)} {tokenInfo?.symbol || ''}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: '#6b7280' }}>当前授权额度:</span>
                     <span style={{ fontWeight: '500' }}>
                       {tokenAllowance === maxUint256 ? '无限制' : formatEther(tokenAllowance || 0n)}
@@ -456,7 +524,8 @@ export default function WagmiApprove() {
             border: '1px solid #e5e7eb',
             borderRadius: '8px',
             padding: '16px',
-            backgroundColor: '#fafafa'
+            backgroundColor: '#fafafa',
+            marginBottom: '20px'
           }}>
             <h4 style={{
               margin: '0 0 12px 0',
@@ -516,6 +585,91 @@ export default function WagmiApprove() {
               textAlign: 'center'
             }}>
               只授权指定金额，更加安全
+            </div>
+          </div>
+
+          {/* 存款部分 */}
+          <div style={{
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            padding: '16px',
+            backgroundColor: '#f0f9ff'
+          }}>
+            <h4 style={{
+              margin: '0 0 12px 0',
+              fontSize: '16px',
+              fontWeight: '600',
+              color: '#374151'
+            }}>存款到TokenBank</h4>
+            
+            {/* 存款金额输入 */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '8px',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: '#374151'
+              }}>存款金额</label>
+              <input
+                type="number"
+                value={formatEther(depositAmount)}
+                onChange={(e) => setDepositAmount(parseEther(e.target.value || "0"))}
+                placeholder="输入存款金额"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            {/* 存款条件检查 */}
+            {isAddress(token) && depositAmount > 0n && (
+              <div style={{
+                marginBottom: '16px',
+                fontSize: '12px',
+                color: '#6b7280'
+              }}>
+                {tokenAllowance === null || tokenAllowance < depositAmount ? (
+                  <div style={{ color: '#ef4444' }}>⚠️ 授权额度不足，请先进行授权</div>
+                ) : tokenBalance === null || tokenBalance < depositAmount ? (
+                  <div style={{ color: '#ef4444' }}>⚠️ 钱包余额不足</div>
+                ) : (
+                  <div style={{ color: '#10b981' }}>✓ 可以进行存款</div>
+                )}
+              </div>
+            )}
+
+            {/* 存款按钮 */}
+            <button 
+              onClick={handleDeposit} 
+              disabled={!canDeposit}
+              style={{
+                width: '100%',
+                padding: '14px',
+                backgroundColor: canDeposit ? '#0ea5e9' : '#d1d5db',
+                color: canDeposit ? 'white' : '#9ca3af',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: canDeposit ? 'pointer' : 'not-allowed',
+                fontSize: '16px',
+                fontWeight: '600',
+                transition: 'background-color 0.2s',
+                marginBottom: '8px'
+              }}
+            >
+              {isPending ? '处理中...' : '存款'}
+            </button>
+            <div style={{
+              fontSize: '12px',
+              color: '#6b7280',
+              textAlign: 'center'
+            }}>
+              将代币存入TokenBank合约
             </div>
           </div>
         </div>
