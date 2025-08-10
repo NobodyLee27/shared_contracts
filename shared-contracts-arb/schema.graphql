@@ -1,0 +1,56 @@
+type Deposit @entity(immutable: true) {
+  id: Bytes!
+  user: Bytes! # address
+  token: Bytes! # address
+  amount: BigInt! # uint256
+  newBalance: BigInt! # uint256
+  totalDeposit: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type DepositWithPermit2 @entity(immutable: true) {
+  id: Bytes!
+  user: Bytes! # address
+  token: Bytes! # address
+  amount: BigInt! # uint256
+  nonce: BigInt! # uint256
+  deadline: BigInt! # uint256
+  newBalance: BigInt! # uint256
+  totalDeposit: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type TokenSupported @entity(immutable: true) {
+  id: Bytes!
+  token: Bytes! # address
+  tokenCount: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type UserTokenAdded @entity(immutable: true) {
+  id: Bytes!
+  user: Bytes! # address
+  token: Bytes! # address
+  userTokenCount: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type Withdraw @entity(immutable: true) {
+  id: Bytes!
+  user: Bytes! # address
+  token: Bytes! # address
+  amount: BigInt! # uint256
+  newBalance: BigInt! # uint256
+  totalDeposit: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
