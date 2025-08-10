@@ -7,6 +7,7 @@ import { polygonAmoy } from 'wagmi/chains'
 import { injected, metaMask, walletConnect } from '@wagmi/connectors'
 import WagmiSignPermit2 from '@/components/WagmiSignPermit2'
 import WagmiSign from '@/components/WagmiSign'
+// 0x0f404eF20C8CC6347ce2d2cD8dc872b3093bdccB
 
 const queryClient = new QueryClient()
 const config = createConfig({
@@ -20,8 +21,8 @@ const config = createConfig({
   ],
   transports: {
     // [polygonAmoy.id]: http('https://polygon-amoy.infura.io/v3/84c45d069b5347459844c6869a6c2485'),
-    [polygonAmoy.id]: http('https://polygon-amoy.g.alchemy.com/v2/vkZ5WPCV0qB9Gye9sajMsn9YhdSl7Shy'),
-    // [polygonAmoy.id]: http('https://rpc.ankr.com/polygon_amoy/75d0c18a2428def4526a87deb05a13fa59e6d32398707c7cd7f21555f6918162'),
+    // [polygonAmoy.id]: http('https://polygon-amoy.g.alchemy.com/v2/vkZ5WPCV0qB9Gye9sajMsn9YhdSl7Shy'),
+    [polygonAmoy.id]: http('https://rpc.ankr.com/polygon_amoy/75d0c18a2428def4526a87deb05a13fa59e6d32398707c7cd7f21555f6918162'),
   },
 })
 
