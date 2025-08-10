@@ -5,8 +5,17 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Script, console} from "forge-std/Script.sol";
 import { TokenBank } from "../src/TokenBank.sol";
 
-// forge script script/TokenBankDepolyer.s.sol:TokenBankDeployer --rpc-url https://polygon-amoy.g.alchemy.com/v2/vkZ5WPCV0qB9Gye9sajMsn9YhdSl7Shy --private-key $WEB3GAMING_PRIVATE_KEY --broadcast --verify --etherscan-api-key 3B5VHH6EPJ17CQGFIHDT3BU5V4UNHIEVQB --priority-gas-price 30000000000
+// forge script script/TokenBankDepolyer.s.sol:TokenBankDeployer --rpc-url $WEB3GAMING_ALCHEMY_RPC_URL --private-key $WEB3GAMING_PRIVATE_KEY --broadcast --verify --etherscan-api-key $WEB3GAMING_ETHERSCAN_API_KEY
+// == Logs ==
+//   Deploying contracts with the account: 0x355eb1c3D6dF0642b3abe2785e821C574837C79f
+//   deploy token_bank: 0x53191344e115a119383A2eED003Db814F147F46B
 
+// forge script script/TokenBankDepolyer.s.sol:TokenBankDeployer --rpc-url https://arb-sepolia.g.alchemy.com/v2/vkZ5WPCV0qB9Gye9sajMsn9YhdSl7Shy --private-key $WEB3GAMING_PRIVATE_KEY --broadcast --verify --etherscan-api-key DMUEFJ91EEYGRDE64MQZU6IQZD3ASHINUY
+// == Logs ==
+//   Deploying contracts with the account: 0x355eb1c3D6dF0642b3abe2785e821C574837C79f
+//   deploy token_bank: 0x25463AEc4cc8a03EB11a57366AA70D26844Eb325
+
+// forge script script/TokenBankDepolyer.s.sol:TokenBankDeployer --rpc-url https://polygon-amoy.g.alchemy.com/v2/vkZ5WPCV0qB9Gye9sajMsn9YhdSl7Shy --private-key $WEB3GAMING_PRIVATE_KEY --broadcast --verify --etherscan-api-key 3B5VHH6EPJ17CQGFIHDT3BU5V4UNHIEVQB --priority-gas-price 30000000000
 /**
 * == Logs ==
   Deploying contracts with the account: 0x355eb1c3D6dF0642b3abe2785e821C574837C79f

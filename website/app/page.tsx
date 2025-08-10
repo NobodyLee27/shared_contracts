@@ -3,7 +3,7 @@
 import { WagmiProvider, http } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createConfig } from 'wagmi'
-import { polygonAmoy } from 'wagmi/chains'
+import { polygonAmoy, sepolia, arbitrumSepolia } from 'wagmi/chains'
 import { injected, metaMask, walletConnect } from '@wagmi/connectors'
 import WagmiSignPermit2 from '@/components/WagmiSignPermit2'
 import WagmiSign from '@/components/WagmiSign'
@@ -11,7 +11,7 @@ import WagmiSign from '@/components/WagmiSign'
 
 const queryClient = new QueryClient()
 const config = createConfig({
-  chains: [polygonAmoy],
+  chains: [polygonAmoy, sepolia, arbitrumSepolia],
   connectors: [
     metaMask(),
     walletConnect({
@@ -21,8 +21,13 @@ const config = createConfig({
   ],
   transports: {
     // [polygonAmoy.id]: http('https://polygon-amoy.infura.io/v3/84c45d069b5347459844c6869a6c2485'),
-    // [polygonAmoy.id]: http('https://polygon-amoy.g.alchemy.com/v2/vkZ5WPCV0qB9Gye9sajMsn9YhdSl7Shy'),
-    [polygonAmoy.id]: http('https://rpc.ankr.com/polygon_amoy/75d0c18a2428def4526a87deb05a13fa59e6d32398707c7cd7f21555f6918162'),
+    [polygonAmoy.id]: http('https://polygon-amoy.g.alchemy.com/v2/vkZ5WPCV0qB9Gye9sajMsn9YhdSl7Shy'),
+    // [polygonAmoy.id]: http('https://rpc.ankr.com/polygon_amoy/75d0c18a2428def4526a87deb05a13fa59e6d32398707c7cd7f21555f6918162'),
+
+    [sepolia.id]: http('https://eth-sepolia.g.alchemy.com/v2/vkZ5WPCV0qB9Gye9sajMsn9YhdSl7Shy'),
+
+    [arbitrumSepolia.id]: http('https://arb-sepolia.g.alchemy.com/v2/vkZ5WPCV0qB9Gye9sajMsn9YhdSl7Shy'),
+    
   },
 })
 

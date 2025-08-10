@@ -35,7 +35,10 @@ const tokenBankABI = parseAbi([
   "function balances(address user, address token) external view returns (uint256)",
 ]);
 
-const workChainId = 80002n;
+// const workChainId = 80002n;
+// const workChainId = 11155111n;
+const workChainId = 421614n;
+
 
 type MessageType = 'info' | 'success' | 'error' | 'warning';
 
@@ -47,7 +50,14 @@ interface Message {
 
 export default function WagmiApprove() {
   
-  const tokenBank = getAddress("0x085De1616D11610220293Df29Ba7854477532426");
+  // eth
+  // const tokenBank = getAddress("0x53191344e115a119383A2eED003Db814F147F46B");
+  // polygon
+  // const tokenBank = getAddress("0x085De1616D11610220293Df29Ba7854477532426");
+
+  // arbitrum
+  const tokenBank = getAddress("0x25463AEc4cc8a03EB11a57366AA70D26844Eb325");
+
   const loginAccount = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
