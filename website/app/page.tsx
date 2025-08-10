@@ -21,6 +21,7 @@ const config = createConfig({
   transports: {
     // [polygonAmoy.id]: http('https://polygon-amoy.infura.io/v3/84c45d069b5347459844c6869a6c2485'),
     [polygonAmoy.id]: http('https://polygon-amoy.g.alchemy.com/v2/vkZ5WPCV0qB9Gye9sajMsn9YhdSl7Shy'),
+    // [polygonAmoy.id]: http('https://rpc.ankr.com/polygon_amoy/75d0c18a2428def4526a87deb05a13fa59e6d32398707c7cd7f21555f6918162'),
   },
 })
 
