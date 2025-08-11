@@ -11,7 +11,7 @@ contract ReentrancyAttack {
 
     // bool private _nonReentrant;
 
-    // 防止重入攻击
+    // 锁
     // modifier nonReentrant() {
     //     // 第一次调用时，将状态变量设置为 true
     //     require(!_nonReentrant, "ReentrancyGuard: reentrant call");
